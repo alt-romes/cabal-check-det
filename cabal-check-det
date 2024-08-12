@@ -1,13 +1,14 @@
 #!/bin/sh
 
 if test -z "$2" -o -z "$3"; then
-    echo "Usage: cabal check-det <package> <ghc> [<store-dir>]"
+    echo "Usage: cabal check-det <package> <ghc> [store-dir] [extra-cabal-opts]"
     exit 1
 fi
 
 PKG="$2"
 GHC="$3"
 STOREDIR="$4"
+EXTRA_OPTS="$5"
 
 ORIG="$PWD"
 TMPD="$(mktemp -d)"
@@ -23,7 +24,7 @@ echo "package *" >> cabal.project
 echo "  ghc-options: -j8 -fobject-determinism" >> cabal.project
 
 BASE_STORE="$(if test -z "$STOREDIR"; then echo "$PWD/AAAAA"; else echo "$STOREDIR"; fi)"
-$CABAL --store-dir="$BASE_STORE" build -w "$GHC" all --allow-newer=base,template-haskell
+$CABAL --store-dir="$BASE_STORE" build -w "$GHC" all --allow-newer=base,template-haskell $EXTRA_OPTS
 if test -z "$STOREDIR"; then
     # No store dir was given, so we will compare the stores
     mv "$BASE_STORE" "$BASE_STORE"_FIRST
@@ -33,7 +34,7 @@ mv dist-newstyle/ first-dist-newstyle/
 # If want to compare stores with decrementing uniques (requires patched Cabal that doesn't leak this flag into objects):
 # echo "  ghc-options: -dinitial-unique=16777215 -dunique-increment=-1" >> cabal.project
 # We apply the flag to the local packages though, since those are not installed to the store thus the command lines don't leak (there's no hash, only "inplace")
-$CABAL --store-dir="$BASE_STORE" build -w "$GHC" all --ghc-options="-dinitial-unique=16777215 -dunique-increment=-1" --allow-newer=base,template-haskell
+$CABAL --store-dir="$BASE_STORE" build -w "$GHC" all --ghc-options="-dinitial-unique=16777215 -dunique-increment=-1" --allow-newer=base,template-haskell $EXTRA_OPTS
 if test -z "$STOREDIR"; then
     # No store dir was given, so we now compare the stores
     diff --recursive "$BASE_STORE" "$BASE_STORE"_FIRST
