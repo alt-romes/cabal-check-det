@@ -21,6 +21,7 @@ echo "$PWD"
 
 echo "packages: ." > cabal.project
 echo "package *" >> cabal.project
+# echo "  ghc-options: -j8" >> cabal.project
 echo "  ghc-options: -j8 -fobject-determinism" >> cabal.project
 
 BASE_STORE="$(if test -z "$STOREDIR"; then echo "$PWD/AAAAA"; else echo "$STOREDIR"; fi)"
@@ -39,8 +40,29 @@ if test -z "$STOREDIR"; then
     # No store dir was given, so we now compare the stores
     diff --recursive "$BASE_STORE" "$BASE_STORE"_FIRST
 fi
-diff --recursive dist-newstyle first-dist-newstyle
-echo "$PWD"
+
+diff --recursive "$PWD/dist-newstyle" "$PWD/first-dist-newstyle" > thediff
+
+HIFILES=$(cat thediff | grep -e "\.hi" -e "\.dyn_hi" -e "\.p_hi" | sed 's/^.*dist-newstyle\/\(.*\)\.\(.*\)hi and.*$/\1.\2hi/g')
+for i in $HIFILES; do
+    "$GHC" --show-iface "$PWD/dist-newstyle/$i" > "$PWD/dist-newstyle/$i.iface"
+    "$GHC" --show-iface "$PWD/first-dist-newstyle/$i" > "$PWD/first-dist-newstyle/$i.iface"
+    diff -q "$PWD/dist-newstyle/$i.iface" "$PWD/first-dist-newstyle/$i.iface"
+done
+
+OFILES=$(cat thediff | grep -e "\.o" -e "\.dyn_o" -e "\.p_o" | sed 's/^.*dist-newstyle\/\(.*\)\.\(.*\)o and.*$/\1.\2o/g')
+for i in $OFILES; do
+    objdump -s "$PWD/dist-newstyle/$i" > "$PWD/dist-newstyle/$i.objdump"
+    objdump -s "$PWD/first-dist-newstyle/$i" > "$PWD/first-dist-newstyle/$i.objdump"
+    diff -q "$PWD/dist-newstyle/$i.objdump" "$PWD/first-dist-newstyle/$i.objdump"
+    if test $? = 0; then
+        # No diffs on -s, which means -s is not enough to show diff.
+        diff -q "$PWD/dist-newstyle/$i" "$PWD/first-dist-newstyle/$i"
+    fi
+done
+
+# Show the files we havent shown yet (-v)
+cat thediff | grep -v -e "\.hi" -e "\.dyn_hi" -e "\.p_hi" -e "\.o" -e "\.dyn_o" -e "\.p_o"
 
 cd "$ORIG" || exit 2
 
